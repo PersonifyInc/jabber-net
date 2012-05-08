@@ -42,6 +42,8 @@ namespace jabber.connection
     [SVN(@"$Id$")]
     public abstract class Options
     {
+        public const string ANONYMOUS = "anonymous";
+
         /// <summary>
         /// Contains the default namespace for this connection.
         /// </summary>
@@ -471,6 +473,12 @@ namespace jabber.connection
         /// </summary>
         [Category("Stream")]
         public event System.Net.Security.RemoteCertificateValidationCallback OnInvalidCertificate;
+
+        public bool UseAnonymous
+        {
+            get { return (bool)this[Options.ANONYMOUS]; }
+            set { this[Options.ANONYMOUS] = value; }
+        }
 
         /// <summary>
         /// Gets the tracker for sending IQ packets.
@@ -1175,7 +1183,7 @@ namespace jabber.connection
                     {
                         State = SASLState.Instance;
                     }
-                    m_saslProc = SASLProcessor.createProcessor(types, m_sslOn || (bool)this[Options.PLAINTEXT], ms);
+                    m_saslProc = SASLProcessor.createProcessor(types, m_sslOn || (bool)this[Options.PLAINTEXT], ms, (bool)this[Options.ANONYMOUS]);
                     if (m_saslProc == null)
                     {
                         FireOnError(new NotImplementedException("No implemented mechanisms in: " + types.ToString()));

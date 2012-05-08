@@ -126,8 +126,13 @@ namespace jabber.connection.sasl
         /// <param name="plaintextOK">Is it ok to select insecure types?</param>
         /// <param name="mechs">The mechanisms supported by the server</param>
         /// <returns></returns>
-        public static SASLProcessor createProcessor(MechanismType mt, bool plaintextOK, Mechanisms mechs)
+        public static SASLProcessor createProcessor(MechanismType mt, bool plaintextOK, Mechanisms mechs, bool useAnonymous)
         {
+            if (useAnonymous && (mt & MechanismType.ANONYMOUS) == MechanismType.ANONYMOUS) 
+            {
+                return new AnonymousProcessor();
+            }
+
             if ((mt & MechanismType.EXTERNAL) == MechanismType.EXTERNAL)
             {
                 return new ExternalProcessor();

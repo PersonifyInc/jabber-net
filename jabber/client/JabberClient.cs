@@ -55,6 +55,7 @@ namespace jabber.client
     public class JabberClient : XmppStream
     {
         private static readonly object[][] DEFAULTS = new object[][] {
+            new object[] {Options.ANONYMOUS, false},
             new object[] {Options.RESOURCE, "Jabber.Net"},
             new object[] {Options.PRIORITY, 0},
             new object[] {Options.AUTO_LOGIN, true},
@@ -354,6 +355,37 @@ namespace jabber.client
             Debug.Assert(Resource != null, "Resource must not be null for XEP-78 authentication");
 
             this[Options.AUTO_LOGIN_THISPASS] = true;
+
+            if (State == ManualSASLLoginState.Instance)
+            {
+                ProcessFeatures();
+                return;
+            }
+
+            this[Options.JID] = new JID(User, Server, Resource);
+
+            AuthIQ aiq = new AuthIQ(Document);
+            aiq.Type = IQType.get;
+            Auth a = aiq.Instruction;
+            a.Username = User;
+
+            lock (StateLock)
+            {
+                State = GetAuthState.Instance;
+            }
+            Tracker.BeginIQ(aiq, new IqCB(OnGetAuth), null);
+        }
+
+        public void LoginAnonymously()
+        {
+            //FF
+            /*
+            Debug.Assert(User != null, "Username must not be null for XEP-78 authentication");
+            Debug.Assert(Password != null, "Password must not be null for XEP-78 authentication");
+            Debug.Assert(Resource != null, "Resource must not be null for XEP-78 authentication");
+            //*/
+            this[Options.AUTO_LOGIN_THISPASS] = true;
+            this[Options.ANONYMOUS] = true;
 
             if (State == ManualSASLLoginState.Instance)
             {
