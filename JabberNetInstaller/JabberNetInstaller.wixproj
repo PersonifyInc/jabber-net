@@ -7,7 +7,7 @@
     <OutputName Condition="'$(WixVersion)' != '' ">JabberNet-$(WixVersion)</OutputName>
     <OutputName Condition="'$(WixVersion)' == '' ">JabberNet</OutputName>
     <OutputType>Package</OutputType>
-    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.0\Wix.targets</WixTargetsPath>
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
     <WixToolPath>$(ProgramFiles)\Windows Installer XML v3\bin\</WixToolPath>
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
@@ -100,6 +100,7 @@
   <ItemGroup>
     <WixExtension Include="WixUIExtension">
       <HintPath>C:\Program Files\Windows Installer XML v3\bin\WixUIExtension.dll</HintPath>
+      <Name>WixUIExtension</Name>
     </WixExtension>
   </ItemGroup>
   <ItemGroup>
