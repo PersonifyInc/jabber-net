@@ -452,6 +452,12 @@ namespace bedrock.net
                 body.Hold = m_hold;
                 body.Lang = m_lang;
                 body.RID = r;
+
+                // Add a version attribute to get ejabberd to return info
+                const string xmpp = "urn:xmpp:xbosh";
+                XmlAttribute versionAttrib = body.OwnerDocument.CreateAttribute("xmpp", "version", xmpp);
+                versionAttrib.Value = "1.0";
+                body.SetAttributeNode(versionAttrib);
             }
             else
             {
