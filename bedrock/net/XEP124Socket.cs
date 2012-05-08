@@ -292,6 +292,23 @@ namespace bedrock.net
         }
 
         /// <summary>
+        /// Restart stream
+        ///   Reference XEP-0206, Section 5
+        /// </summary>
+        public void RestartStream()
+        {
+            Body body = CreateOpenBodyTag();
+            const string xmpp = "urn:xmpp:xbosh";
+            XmlAttribute restartAttrib = body.OwnerDocument.CreateAttribute("xmpp", "restart", xmpp);
+            restartAttrib.Value = "true";
+            body.SetAttributeNode(restartAttrib);
+
+            //byte[] buf = ENC.GetBytes(body.OuterXml);
+            //GetSocket().Execute(METHOD, m_uri, buf, 0, buf.Length, CONTENT_TYPE);
+            Enqueue(body);
+        }
+
+        /// <summary>
         /// Stop polling.
         /// </summary>
         public override void Close()

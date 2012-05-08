@@ -36,6 +36,12 @@ namespace jabber.connection
             // We don't send the <stream:stream> tag in XEP 124.
             XEP124Socket mySock = ((XEP124Socket) Socket);
             mySock.NS = stream.NS;
+
+            bool first = !IsInitialized();
+            if (!first) {
+                mySock.RestartStream();
+            }
+
             mySock.Write(null, 0, 0);
         }
 

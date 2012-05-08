@@ -64,6 +64,14 @@ namespace jabber.connection
         }
 
         /// <summary>
+        /// Property representing stream init state
+        /// </summary>
+        public bool IsInitialized()
+        {
+            return m_elements != null;
+        }
+
+        /// <summary>
         /// Sets up the element stream.  This is the place to add factories.
         /// </summary>
         public override void InitializeStream()
