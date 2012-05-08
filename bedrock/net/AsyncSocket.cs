@@ -79,7 +79,9 @@ namespace bedrock.net
             Error
         }
 
-        private const int BUFSIZE = 4096;
+        // 05082012: HACK HACK HACK -- looks like 4096 is a bit small for what can be pumped through. 64k?
+        //private const int BUFSIZE = 4096;
+        private const int BUFSIZE = 64*1024;
 
         /// <summary> The set of allowable errors in SSL certificates
         /// if UntrustedRootOK is set to true.  </summary>
