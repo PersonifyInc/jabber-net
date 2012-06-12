@@ -354,6 +354,7 @@ namespace bedrock.net
         void ISocketEventListener.OnClose(BaseSocket sock)
         {
             m_sock = null;
+            m_current = null;
             lock (m_lock)
             {
                 Monitor.Pulse(m_lock);
