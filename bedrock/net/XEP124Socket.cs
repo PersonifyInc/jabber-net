@@ -234,9 +234,8 @@ namespace bedrock.net
                     //    m_queue.AddFirst((XmlElement)null);
 
                     Debug.WriteLine("A: " + m_sockA.IsPending);
-                    Debug.WriteLine("b: " + m_sockB.IsPending);
-                    while ((m_queue.First == null) || BothPending)
-                    {
+                    Debug.WriteLine("B: " + m_sockB.IsPending);
+                    while ((m_queue.First == null) || BothPending) {
                         Monitor.Wait(m_queue);
                         if (!m_running)
                             return;
@@ -317,7 +316,7 @@ namespace bedrock.net
             body.Type = BodyType.terminate;
 
             Enqueue(body);
-            
+
             if (m_thread != null)
                 m_thread.Join();
 

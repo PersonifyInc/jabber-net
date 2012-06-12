@@ -182,10 +182,15 @@ namespace jabber.connection
         /// <param name="clean">Sends the stream:stream close packet if true.</param>
         public override void Close(bool clean)
         {
-            // TODO: socket should still be connected, excepts for races.  Revist.
-            if (clean)
-                Write("</stream:stream>");
-            m_sock.Close();
+            if (m_sock != null) {
+                // TODO: socket should still be connected, excepts for races.  Revist.
+                if (clean)
+                    Write("</stream:stream>");
+
+                if (m_sock != null) {
+                    m_sock.Close();
+                }
+            }
         }
 
 #if !NO_SSL

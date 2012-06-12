@@ -338,8 +338,13 @@ namespace bedrock.net
 
             byte[] buf = ms.ToArray();
 
-            m_sock.Write(buf);
-            m_sock.RequestRead();
+            if (m_sock != null) {
+                m_sock.Write(buf);
+            }
+
+            if (m_sock != null) {
+                m_sock.RequestRead();
+            }
         }
 
         void ISocketEventListener.OnConnect(BaseSocket sock)
