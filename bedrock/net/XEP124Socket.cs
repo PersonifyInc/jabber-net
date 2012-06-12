@@ -653,7 +653,10 @@ namespace bedrock.net
                 {
                     m_running = false;
                     Error err = new Error(m_doc);
-                    err.AppendChild(m_doc.CreateElement(b.GetAttribute("condition"), URI.STREAM_ERROR));
+                    string conditionAttribute = b.GetAttribute("condition");
+                    if (conditionAttribute.Length > 0) {
+                        err.AppendChild(m_doc.CreateElement(conditionAttribute, URI.STREAM_ERROR));
+                    }
                     byte[] sbuf = ENC.GetBytes(err.OuterXml);
                     m_listener.OnRead(this, sbuf, 0, sbuf.Length);
                     sbuf = ENC.GetBytes("</stream:stream>");
