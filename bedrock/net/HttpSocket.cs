@@ -12,6 +12,8 @@
  * See LICENSE.txt for details.
  * --------------------------------------------------------------------------*/
 
+#define WEB_REQUEST
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -80,12 +82,36 @@ namespace bedrock.net
             }
         }
 
+#if(WEB_REQUEST)
+        private class RequestState
+        {
+            // This class stores the state of the request. 
+            const int BUFFER_SIZE = 64*1024;    //is 64k ok?
+            public StringBuilder requestData;
+            public byte[] bufferRead;
+            public WebRequest request;
+            public WebResponse response;
+            public Stream responseStream;
+            public RequestState()
+            {
+                bufferRead = new byte[BUFFER_SIZE];
+                requestData = new StringBuilder("");
+                request = null;
+                responseStream = null;
+            }
+        }
+#endif
+
         private static readonly Encoding ENC = Encoding.UTF8;
         private string m_host = null;
         private Address m_addr = null;
         private bool m_ssl = false;
-
+#if(WEB_REQUEST)
+        private WebRequest m_sock = null;
+        public static ManualResetEvent allDone = new ManualResetEvent(false);        
+#else
         private AsyncSocket m_sock = null;
+#endif
         private ParseState m_state = ParseState.START;
         private PendingRequest m_current = null;
         private bool m_keepRunning = true;
@@ -158,7 +184,16 @@ namespace bedrock.net
         public string Name
         {
             get { return m_name; }
-            set { m_name = value; }
+            set 
+            { 
+                m_name = value; 
+#if(WEB_REQUEST)
+                if (m_sock != null)
+                {
+                    m_sock.ConnectionGroupName = m_name;
+                }
+#endif
+            }
         }
 
         /// <summary>
@@ -221,7 +256,20 @@ namespace bedrock.net
                 return;
 
             m_ssl = (uri != null) && (uri.Scheme == "https");
-            m_host = uri.Host;
+            m_host = uri.Host;            
+#if(WEB_REQUEST)
+            
+            m_errorCount = 0;
+
+            if (!m_keepRunning)
+                return;
+            m_state = ParseState.START;
+            m_sock = WebRequest.Create(uri);
+            m_sock.ConnectionGroupName = m_name;
+            //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
+            ((ISocketEventListener)this).OnConnect(null);
+        }
+#else
             if (m_proxyURI != null)
             {
                 // TODO: add CONNECT support here.  ShttpProxy?
@@ -243,6 +291,7 @@ namespace bedrock.net
             m_sock = new AsyncSocket(null, this, m_ssl, false);
             m_sock.Connect(m_addr, m_host);
         }
+#endif
 
         /// <summary>
         /// Shut down the socket, abandoning any outstainding requests
@@ -255,9 +304,12 @@ namespace bedrock.net
                 // in case we closed while waiting for connect
                 Monitor.Pulse(m_lock);
             }
-
+#if(WEB_REQUEST)
+            ((ISocketEventListener)this).OnClose(null);
+#else
             if (Connected)
                 m_sock.Close();
+#endif
             m_sock = null;
         }
 
@@ -304,10 +356,148 @@ namespace bedrock.net
             s.Write(buf, 0, buf.Length);
         }
 
+        
+#if(WEB_REQUEST)
         private void Send(PendingRequest req)
         {
             m_current = req;
+            if (m_sock != null)
+            {
+                try
+                {
+                    HttpWebRequest request = (HttpWebRequest)m_sock;
+                    request.Method = req.Method;
+                    request.ContentType = req.ContentType;
+                    request.ContentLength = req.Length;
+                    request.ConnectionGroupName = m_name;
+                    //request.Headers.Set(HttpRequestHeader.Date, string.Format("{0:r}", DateTime.Now));
+                    //request.Headers.Set(HttpRequestHeader.Host, req.URI.Host);
+                    request.Headers.Set("X-JN-Name", m_name);
+                    if ((m_proxyURI != null) && (m_proxyCredentials != null))
+                    {
+                        try
+                        {
+                            WebProxy myProxy = new WebProxy();
+                            myProxy.Address = m_proxyURI;
+                            myProxy.Credentials = m_proxyCredentials;
+                            request.Proxy = myProxy;
+                        }
+                        catch (UriFormatException e)
+                        {
+                            Console.WriteLine("\nUriFormatException is thrown.Message is {0}", e.Message);
+                            Console.WriteLine("\nThe format of the Proxy address is invalid");
+                        }
+                    }
 
+                    Stream dataStream = m_sock.GetRequestStream();
+                    dataStream.Write(req.Body, 0, req.Length);
+                    dataStream.Close();
+
+                    RequestState myRequestState = new RequestState();
+                    myRequestState.request = request;
+
+                    // Start the Asynchronous call for response.
+                    IAsyncResult asyncResult = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
+
+                    //Data being sent. Call OnWrite to signal listener
+                    ((ISocketEventListener)this).OnWrite(null, req.Body, 0, req.Length);
+
+                    allDone.WaitOne();
+                    // Release the WebResponse resource.
+                    myRequestState.response.Close();
+                }
+                catch (WebException e)
+                {
+                    Console.WriteLine("WebException raised!");
+                    Console.WriteLine("\n{0}", e.Message);
+                    Console.WriteLine("\n{0}", e.Status);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception raised!");
+                    Console.WriteLine("Source : " + e.Source);
+                    Console.WriteLine("Message : " + e.Message);
+                }
+            }
+        }
+
+        private void RespCallback(IAsyncResult asynchronousResult)
+        {
+            try
+            {
+                // Set the State of request to asynchronous.
+                RequestState myRequestState = (RequestState)asynchronousResult.AsyncState;
+                WebRequest myWebRequest1 = myRequestState.request;
+                // End the Asynchronous response.
+                myRequestState.response = myWebRequest1.EndGetResponse(asynchronousResult);                
+
+                // Read the response into a 'Stream' object.
+                Stream responseStream = myRequestState.response.GetResponseStream();
+                myRequestState.responseStream = responseStream;
+                // Begin the reading of the contents of the HTML page and print it to the console.
+                IAsyncResult asynchronousResultRead = responseStream.BeginRead(myRequestState.bufferRead, 0, myRequestState.bufferRead.Length, new AsyncCallback(ReadCallBack), myRequestState);
+
+            }
+            catch (WebException e)
+            {
+                Console.WriteLine("WebException raised!");
+                Console.WriteLine("\n{0}", e.Message);
+                Console.WriteLine("\n{0}", e.Status);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Exception raised!");
+                Console.WriteLine("Source : " + e.Source);
+                Console.WriteLine("Message : " + e.Message);
+            }
+        }
+
+        private void ReadCallBack(IAsyncResult asyncResult)
+        {
+            try
+            {
+                // Result state is set to AsyncState.
+                RequestState myRequestState = (RequestState)asyncResult.AsyncState;
+                Stream responseStream = myRequestState.responseStream;
+                int read = responseStream.EndRead(asyncResult);
+                // Read the contents of the HTML page and then print to the console. 
+                if (read > 0)
+                {
+                    myRequestState.requestData.Append(Encoding.ASCII.GetString(myRequestState.bufferRead, 0, read));
+                    IAsyncResult asynchronousResult = responseStream.BeginRead(myRequestState.bufferRead, 0, myRequestState.bufferRead.Length, new AsyncCallback(ReadCallBack), myRequestState);
+                }
+                else
+                {
+                    //Finish getting all the data
+                    if (myRequestState.requestData.Length > 1)
+                    {
+                        string stringContent;
+                        stringContent = myRequestState.requestData.ToString();
+
+                        ((ISocketEventListener)this).OnRead(null, myRequestState.requestData, 0, myRequestState.requestData.Length);
+                    }                    
+                    responseStream.Close();
+                    allDone.Set();
+                }
+            }
+            catch (WebException e)
+            {
+                Console.WriteLine("WebException raised!");
+                Console.WriteLine("\n{0}", e.Message);
+                Console.WriteLine("\n{0}", e.Status);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Exception raised!");
+                Console.WriteLine("Source : {0}", e.Source);
+                Console.WriteLine("Message : {0}", e.Message);
+            }
+
+        }
+#else
+        private void Send(PendingRequest req)
+        {
+            m_current = req;
             // Try to get it big enough that we don't have to allocate, without going overboard.
             MemoryStream ms = new MemoryStream(req.Length + 256);
             WriteString(ms, req.Method);
@@ -346,6 +536,7 @@ namespace bedrock.net
                 m_sock.RequestRead();
             }
         }
+#endif
 
         void ISocketEventListener.OnConnect(BaseSocket sock)
         {
@@ -610,7 +801,11 @@ namespace bedrock.net
         /// </summary>
         public override bool Connected
         {
+#if(WEB_REQUEST)
+            get { return (m_sock != null); }
+#else
             get { return (m_sock != null) && (m_sock.Connected); }
+#endif
         }
 
 #if !NO_SSL

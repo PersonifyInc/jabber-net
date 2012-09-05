@@ -65,106 +65,136 @@ namespace ConsoleClient
 
         public Class1(string[] args)
         {
-            JabberClient jc = new JabberClient();
-            jc.OnReadText += new bedrock.TextHandler(jc_OnReadText);
-            jc.OnWriteText += new bedrock.TextHandler(jc_OnWriteText);
-            jc.OnError +=new bedrock.ExceptionHandler(jc_OnError);
-            jc.OnStreamError += new jabber.protocol.ProtocolHandler(jc_OnStreamError);
+            JabberClient m_jc = new JabberClient();
+            m_jc.OnReadText += new bedrock.TextHandler(jc_OnReadText);
+            m_jc.OnWriteText += new bedrock.TextHandler(jc_OnWriteText);
+            m_jc.OnError +=new bedrock.ExceptionHandler(jc_OnError);
+            m_jc.OnStreamError += new jabber.protocol.ProtocolHandler(jc_OnStreamError);
 
-            jc.AutoReconnect = 3f;
+            m_jc.AutoReconnect = 3f;
 
-            GetOpt go = new GetOpt(this);
-            try
-            {
-                go.Process(args);
-            }
-            catch (ArgumentException)
-            {
-                go.UsageExit();
-            }
+            m_jc.Resource = "StagePresence";
+            m_jc.AutoPresence = false;//true;//HACK: initialPresence;
 
-            if (untrustedOK)
-                jc.OnInvalidCertificate += new System.Net.Security.RemoteCertificateValidationCallback(jc_OnInvalidCertificate);
+            // connect over a BOSH stuff
+            m_jc[Options.POLL_URL] = "http://chat.vix.tv/http-bind/";
 
-            JID j = new JID(jid);
-            jc.User = j.User;
-            jc.Server = j.Server;
-            jc.NetworkHost = networkHost;
-            jc.Port = port;
-            jc.Resource = "Jabber.Net Console Client";
-            jc.Password = pass;
-            jc.AutoStartTLS = TLS;
-            jc.AutoPresence = initialPresence;
-
-            if (certificateFile != null)
-            {
-                jc.SetCertificateFile(certificateFile, certificatePass);
-                Console.WriteLine(jc.LocalCertificate.ToString(true));
-            }
-
-            if (boshURL != null)
-            {
-                jc[Options.POLL_URL] = boshURL;
-                jc[Options.CONNECTION_TYPE] = ConnectionType.HTTP_Binding;
-            }
-            
-            if (register)
-            {
-                jc.AutoLogin = false;
-                jc.OnLoginRequired +=
-                    new bedrock.ObjectHandler(jc_OnLoginRequired);
-                jc.OnRegisterInfo += new RegisterInfoHandler(this.jc_OnRegisterInfo);
-                jc.OnRegistered += new IQHandler(jc_OnRegistered);
-            }
+            // Set server based on BOSH URL
+            Uri uri = new Uri(m_jc[Options.POLL_URL].ToString());
+            m_jc.Server = uri.Host;
+            m_jc[Options.CONNECTION_TYPE] = ConnectionType.HTTP_Binding;
+            m_jc[Options.ANONYMOUS] = true;
+            m_jc[Options.AUTO_ROSTER] = false;
 
             CapsManager cm = new CapsManager();
-            cm.Stream = jc;
-            cm.Node = "http://cursive.net/clients/ConsoleClient";
-            
+            cm.Stream = m_jc;
+            cm.Node = "http://vix.tv";
+
             Console.WriteLine("Connecting");
-            jc.Connect();
+            m_jc.Connect();
             Console.WriteLine("Connected");
 
-            string line;
-            while ((line = Console.ReadLine()) != null)
+
+            //GetOpt go = new GetOpt(this);
+            //try
+            //{
+            //    go.Process(args);
+            //}
+            //catch (ArgumentException)
+            //{
+            //    go.UsageExit();
+            //}
+
+            //if (untrustedOK)
+            //    jc.OnInvalidCertificate += new System.Net.Security.RemoteCertificateValidationCallback(jc_OnInvalidCertificate);
+
+            //JID j = new JID(jid);
+            //jc.User = j.User;
+            //jc.Server = j.Server;
+            //jc.NetworkHost = networkHost;
+            //jc.Port = port;
+            //jc.Resource = "Jabber.Net Console Client";
+            //jc.Password = pass;
+            //jc.AutoStartTLS = TLS;
+            //jc.AutoPresence = initialPresence;
+
+            //if (certificateFile != null)
+            //{
+            //    jc.SetCertificateFile(certificateFile, certificatePass);
+            //    Console.WriteLine(jc.LocalCertificate.ToString(true));
+            //}
+
+            //if (boshURL != null)
+            //{
+            //    jc[Options.POLL_URL] = boshURL;
+            //    jc[Options.CONNECTION_TYPE] = ConnectionType.HTTP_Binding;
+            //    Uri uri = new Uri(jc[Options.POLL_URL].ToString());
+            //    jc.Server = uri.Host;                
+            //    jc[Options.ANONYMOUS] = true;
+            //    jc[Options.AUTO_ROSTER] = false;
+            //}
+            
+            //if (register)
+            //{
+            //    jc.AutoLogin = false;
+            //    jc.OnLoginRequired +=
+            //        new bedrock.ObjectHandler(jc_OnLoginRequired);
+            //    jc.OnRegisterInfo += new RegisterInfoHandler(this.jc_OnRegisterInfo);
+            //    jc.OnRegistered += new IQHandler(jc_OnRegistered);
+            //}
+
+            //CapsManager cm = new CapsManager();
+            //cm.Stream = jc;
+            //cm.Node = "http://vix.tv";
+            
+            //Console.WriteLine("Connecting");
+            //jc.Connect();
+            //Console.WriteLine("Connected");
+
+            while (true)
             {
-                if (line == "/clear")
-                {
-                    // Hm.... I wonder if this works on windows.
-                    Console.Write("\x1b[H\x1b[2J");
-                    continue;
-                }
-                if ((line == "/q") || (line == "/quit"))
-                {
-                    jc.Close();
-                    break;
-                }
-                if (line.Trim() == "")
-                {
-                    continue;
-                }
-                try
-                {
-                    if (line == "</stream:stream>")
-                    {
-                        jc.Write(line);
-                    }
-                    else
-                    {
-                        // TODO: deal with stanzas that span lines... keep
-                        // parsing until we have a full "doc".
-                        XmlDocument doc = new XmlDocument();
-                        doc.LoadXml(line);
-                        XmlElement elem = doc.DocumentElement;
-                        if (elem != null)
-                            jc.Write(elem);
-                    }
-                }
-                catch (XmlException ex)
-                {
-                    Console.WriteLine("Invalid XML: " + ex.Message);
-                }
+                
             }
+            //string line;
+            //while ((line = Console.ReadLine()) != null)
+            //{
+            //    if (line == "/clear")
+            //    {
+            //        // Hm.... I wonder if this works on windows.
+            //        Console.Write("\x1b[H\x1b[2J");
+            //        continue;
+            //    }
+            //    if ((line == "/q") || (line == "/quit"))
+            //    {
+            //        m_jc.Close();
+            //        break;
+            //    }
+            //    if (line.Trim() == "")
+            //    {
+            //        continue;
+            //    }
+            //    try
+            //    {
+            //        if (line == "</stream:stream>")
+            //        {
+            //            m_jc.Write(line);
+            //        }
+            //        else
+            //        {
+            //            // TODO: deal with stanzas that span lines... keep
+            //            // parsing until we have a full "doc".
+            //            XmlDocument doc = new XmlDocument();
+            //            doc.LoadXml(line);
+            //            XmlElement elem = doc.DocumentElement;
+            //            if (elem != null)
+            //                m_jc.Write(elem);
+            //        }
+            //    }
+            //    catch (XmlException ex)
+            //    {
+            //        Console.WriteLine("Invalid XML: " + ex.Message);
+            //    }
+            //}           
         }
 
         bool jc_OnInvalidCertificate(object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate, System.Security.Cryptography.X509Certificates.X509Chain chain, System.Net.Security.SslPolicyErrors sslPolicyErrors)
