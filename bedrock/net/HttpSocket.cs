@@ -396,11 +396,11 @@ namespace bedrock.net
                     RequestState myRequestState = new RequestState();
                     myRequestState.request = request;
 
-                    // Start the Asynchronous call for response.
-                    IAsyncResult asyncResult = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
-
                     //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
-                    ((ISocketEventListener)this).OnWrite(null, req.Body, 0, req.Length);
+                    m_listener.OnWrite(null, req.Body, 0, req.Length);
+
+                    // Start the Asynchronous call for response.
+                    IAsyncResult asyncResult = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);                    
 
                     allDone.WaitOne();
                     // Release the WebResponse resource.
