@@ -83,11 +83,11 @@ namespace bedrock.net
         }
 
 #if(WEB_REQUEST)
-        private class RequestState
+        public class RequestState
         {
             // This class stores the state of the request. 
-            const int BUFFER_SIZE = 64*1024;    //is 64k ok?
-            public StringBuilder requestData;
+            const int BUFFER_SIZE = 64*1024;    //is 64K ok?
+            public MemoryStream requestData;
             public byte[] bufferRead;
             public WebRequest request;
             public WebResponse response;
@@ -95,7 +95,7 @@ namespace bedrock.net
             public RequestState()
             {
                 bufferRead = new byte[BUFFER_SIZE];
-                requestData = new StringBuilder("");
+                requestData = null;
                 request = null;
                 responseStream = null;
             }
@@ -399,7 +399,7 @@ namespace bedrock.net
                     // Start the Asynchronous call for response.
                     IAsyncResult asyncResult = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
 
-                    //Data being sent. Call OnWrite to signal listener
+                    //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
                     ((ISocketEventListener)this).OnWrite(null, req.Body, 0, req.Length);
 
                     allDone.WaitOne();
@@ -429,7 +429,10 @@ namespace bedrock.net
                 RequestState myRequestState = (RequestState)asynchronousResult.AsyncState;
                 WebRequest myWebRequest1 = myRequestState.request;
                 // End the Asynchronous response.
-                myRequestState.response = myWebRequest1.EndGetResponse(asynchronousResult);                
+                myRequestState.response = myWebRequest1.EndGetResponse(asynchronousResult);
+
+                //Hold the response in a MemoryStream.
+                myRequestState.requestData = new MemoryStream((int)myRequestState.response.ContentLength);
 
                 // Read the response into a 'Stream' object.
                 Stream responseStream = myRequestState.response.GetResponseStream();
@@ -460,21 +463,22 @@ namespace bedrock.net
                 RequestState myRequestState = (RequestState)asyncResult.AsyncState;
                 Stream responseStream = myRequestState.responseStream;
                 int read = responseStream.EndRead(asyncResult);
-                // Read the contents of the HTML page and then print to the console. 
+
                 if (read > 0)
                 {
-                    myRequestState.requestData.Append(Encoding.ASCII.GetString(myRequestState.bufferRead, 0, read));
+                    myRequestState.requestData.Write(myRequestState.bufferRead, 0, read);
                     IAsyncResult asynchronousResult = responseStream.BeginRead(myRequestState.bufferRead, 0, myRequestState.bufferRead.Length, new AsyncCallback(ReadCallBack), myRequestState);
                 }
                 else
                 {
-                    //Finish getting all the data
                     if (myRequestState.requestData.Length > 1)
                     {
-                        string stringContent;
-                        stringContent = myRequestState.requestData.ToString();
-
-                        ((ISocketEventListener)this).OnRead(null, myRequestState.requestData, 0, myRequestState.requestData.Length);
+                        Done();
+                        byte[] resp = myRequestState.requestData.ToArray();
+                        if (!m_listener.OnRead(this, resp, 0, resp.Length) || !m_keepRunning)
+                        {
+                            Close();                            
+                        }                        
                     }                    
                     responseStream.Close();
                     allDone.Set();
