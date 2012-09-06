@@ -107,8 +107,8 @@ namespace bedrock.net
         private Address m_addr = null;
         private bool m_ssl = false;
 #if(WEB_REQUEST)
-        private WebRequest m_sock = null;
-        public static ManualResetEvent allDone = new ManualResetEvent(false);        
+        private HttpWebRequest m_request = null;
+        public static ManualResetEvent m_allDone = new ManualResetEvent(false);        
 #else
         private AsyncSocket m_sock = null;
 #endif
@@ -184,16 +184,7 @@ namespace bedrock.net
         public string Name
         {
             get { return m_name; }
-            set 
-            { 
-                m_name = value; 
-#if(WEB_REQUEST)
-                if (m_sock != null)
-                {
-                    m_sock.ConnectionGroupName = m_name;
-                }
-#endif
-            }
+            set { m_name = value; }            
         }
 
         /// <summary>
@@ -251,25 +242,26 @@ namespace bedrock.net
         internal void Connect(Uri uri)
         {
             m_keepRunning = true;
-
-            if (Connected)
-                return;
-
+                  
+#if(WEB_REQUEST)            
             m_ssl = (uri != null) && (uri.Scheme == "https");
-            m_host = uri.Host;            
-#if(WEB_REQUEST)
-            
+            m_host = uri.Host;     
+
             m_errorCount = 0;
 
             if (!m_keepRunning)
                 return;
-            m_state = ParseState.START;
-            m_sock = WebRequest.Create(uri);
-            m_sock.ConnectionGroupName = m_name;
+            
             //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
             ((ISocketEventListener)this).OnConnect(null);
         }
 #else
+            if (Connected)
+                return;
+
+            m_ssl = (uri != null) && (uri.Scheme == "https");
+            m_host = uri.Host;     
+
             if (m_proxyURI != null)
             {
                 // TODO: add CONNECT support here.  ShttpProxy?
@@ -309,8 +301,8 @@ namespace bedrock.net
 #else
             if (Connected)
                 m_sock.Close();
-#endif
             m_sock = null;
+#endif
         }
 
         /// <summary>
@@ -361,63 +353,61 @@ namespace bedrock.net
         private void Send(PendingRequest req)
         {
             m_current = req;
-            if (m_sock != null)
+           
+            try
             {
-                try
+                m_request = (HttpWebRequest)WebRequest.Create(req.URI);                                        
+                m_request.Method = req.Method;
+                m_request.ContentType = req.ContentType;
+                m_request.ContentLength = req.Length;
+                m_request.ConnectionGroupName = m_name;
+                //m_request.Headers.Set(HttpRequestHeader.Date, string.Format("{0:r}", DateTime.Now));
+                //m_request.Headers.Set(HttpRequestHeader.Host, req.URI.Host);
+                m_request.Headers.Set("X-JN-Name", m_name);
+                if ((m_proxyURI != null) && (m_proxyCredentials != null))
                 {
-                    HttpWebRequest request = (HttpWebRequest)m_sock;
-                    request.Method = req.Method;
-                    request.ContentType = req.ContentType;
-                    request.ContentLength = req.Length;
-                    request.ConnectionGroupName = m_name;
-                    //request.Headers.Set(HttpRequestHeader.Date, string.Format("{0:r}", DateTime.Now));
-                    //request.Headers.Set(HttpRequestHeader.Host, req.URI.Host);
-                    request.Headers.Set("X-JN-Name", m_name);
-                    if ((m_proxyURI != null) && (m_proxyCredentials != null))
+                    try
                     {
-                        try
-                        {
-                            WebProxy myProxy = new WebProxy();
-                            myProxy.Address = m_proxyURI;
-                            myProxy.Credentials = m_proxyCredentials;
-                            request.Proxy = myProxy;
-                        }
-                        catch (UriFormatException e)
-                        {
-                            Console.WriteLine("\nUriFormatException is thrown.Message is {0}", e.Message);
-                            Console.WriteLine("\nThe format of the Proxy address is invalid");
-                        }
+                        WebProxy myProxy = new WebProxy();
+                        myProxy.Address = m_proxyURI;
+                        myProxy.Credentials = m_proxyCredentials;
+                        m_request.Proxy = myProxy;
                     }
-
-                    Stream dataStream = m_sock.GetRequestStream();
-                    dataStream.Write(req.Body, 0, req.Length);
-                    dataStream.Close();
-
-                    RequestState myRequestState = new RequestState();
-                    myRequestState.request = request;
-
-                    //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
-                    m_listener.OnWrite(null, req.Body, 0, req.Length);
-
-                    // Start the Asynchronous call for response.
-                    IAsyncResult asyncResult = (IAsyncResult)request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);                    
-
-                    allDone.WaitOne();
-                    // Release the WebResponse resource.
-                    myRequestState.response.Close();
+                    catch (UriFormatException e)
+                    {
+                        Console.WriteLine("\nUriFormatException is thrown.Message is {0}", e.Message);
+                        Console.WriteLine("\nThe format of the Proxy address is invalid");
+                    }
                 }
-                catch (WebException e)
-                {
-                    Console.WriteLine("WebException raised!");
-                    Console.WriteLine("\n{0}", e.Message);
-                    Console.WriteLine("\n{0}", e.Status);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Exception raised!");
-                    Console.WriteLine("Source : " + e.Source);
-                    Console.WriteLine("Message : " + e.Message);
-                }
+
+                Stream dataStream = m_request.GetRequestStream();
+                dataStream.Write(req.Body, 0, req.Length);
+                dataStream.Close();
+
+                RequestState myRequestState = new RequestState();
+                myRequestState.request = m_request;
+
+                //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
+                m_listener.OnWrite(null, req.Body, 0, req.Length);
+
+                // Start the Asynchronous call for response.
+                IAsyncResult asyncResult = (IAsyncResult)m_request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);                    
+
+                m_allDone.WaitOne();
+                // Release the WebResponse resource.
+                myRequestState.response.Close();
+            }
+            catch (WebException e)
+            {
+                Console.WriteLine("\nHttpSocket::Send - WebException raised!");
+                Console.WriteLine("\n{0}", e.Message);
+                Console.WriteLine("\n{0}", e.Status);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("\nHttpSocket::Send - Exception raised!");
+                Console.WriteLine("Source : " + e.Source);
+                Console.WriteLine("Message : " + e.Message);
             }
         }
 
@@ -443,13 +433,13 @@ namespace bedrock.net
             }
             catch (WebException e)
             {
-                Console.WriteLine("WebException raised!");
+                Console.WriteLine("\nHttpSocket::RespCallback - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Exception raised!");
+                Console.WriteLine("\nHttpSocket::RespCallback - Exception raised!");
                 Console.WriteLine("Source : " + e.Source);
                 Console.WriteLine("Message : " + e.Message);
             }
@@ -481,18 +471,18 @@ namespace bedrock.net
                         }                        
                     }                    
                     responseStream.Close();
-                    allDone.Set();
+                    m_allDone.Set();
                 }
             }
             catch (WebException e)
             {
-                Console.WriteLine("WebException raised!");
+                Console.WriteLine("\nHttpSocket::ReadCallBack - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
             }
             catch (Exception e)
             {
-                Console.WriteLine("Exception raised!");
+                Console.WriteLine("\nHttpSocket::ReadCallBack - Exception raised!");
                 Console.WriteLine("Source : {0}", e.Source);
                 Console.WriteLine("Message : {0}", e.Message);
             }
@@ -553,7 +543,9 @@ namespace bedrock.net
 
         void ISocketEventListener.OnClose(BaseSocket sock)
         {
+#if(!WEB_REQUEST)
             m_sock = null;
+#endif
             m_current = null;
             lock (m_lock)
             {
@@ -806,7 +798,7 @@ namespace bedrock.net
         public override bool Connected
         {
 #if(WEB_REQUEST)
-            get { return (m_sock != null); }
+            get { return true; }
 #else
             get { return (m_sock != null) && (m_sock.Connected); }
 #endif
