@@ -77,7 +77,10 @@ namespace ConsoleClient
             m_jc.AutoPresence = false;//true;//HACK: initialPresence;
 
             // connect over a BOSH stuff
-            m_jc[Options.POLL_URL] = "http://chat.vix.tv/http-bind/";
+            m_jc.Server = "chat-test.vix.tv";
+            m_jc.NetworkHost = "chat-test.vix.tv";
+            m_jc.Port = 443;
+            m_jc[Options.POLL_URL] = "https://chat.vix.tv/http-bind/";
 
             // Set server based on BOSH URL
             Uri uri = new Uri(m_jc[Options.POLL_URL].ToString());
