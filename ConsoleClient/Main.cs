@@ -151,50 +151,42 @@ namespace ConsoleClient
             //jc.Connect();
             //Console.WriteLine("Connected");
 
-            while (true)
-            {
-                
-            }
-            //string line;
-            //while ((line = Console.ReadLine()) != null)
+            //while (true)
             //{
-            //    if (line == "/clear")
-            //    {
-            //        // Hm.... I wonder if this works on windows.
-            //        Console.Write("\x1b[H\x1b[2J");
-            //        continue;
-            //    }
-            //    if ((line == "/q") || (line == "/quit"))
-            //    {
-            //        m_jc.Close();
-            //        break;
-            //    }
-            //    if (line.Trim() == "")
-            //    {
-            //        continue;
-            //    }
-            //    try
-            //    {
-            //        if (line == "</stream:stream>")
-            //        {
-            //            m_jc.Write(line);
-            //        }
-            //        else
-            //        {
-            //            // TODO: deal with stanzas that span lines... keep
-            //            // parsing until we have a full "doc".
-            //            XmlDocument doc = new XmlDocument();
-            //            doc.LoadXml(line);
-            //            XmlElement elem = doc.DocumentElement;
-            //            if (elem != null)
-            //                m_jc.Write(elem);
-            //        }
-            //    }
-            //    catch (XmlException ex)
-            //    {
-            //        Console.WriteLine("Invalid XML: " + ex.Message);
-            //    }
-            //}           
+            //    
+            //}
+            string line;
+            while ((line = Console.ReadLine()) != null) {
+                if (line == "/clear") {
+                    // Hm.... I wonder if this works on windows.
+                    Console.Write("\x1b[H\x1b[2J");
+                    continue;
+                }
+                if ((line == "/q") || (line == "/quit")) {
+                    m_jc.Close();
+                    break;
+                }
+                if (line.Trim() == "") {
+                    continue;
+                }
+                try {
+                    if (line == "</stream:stream>") {
+                        m_jc.Write(line);
+                    }
+                    else {
+                        // TODO: deal with stanzas that span lines... keep
+                        // parsing until we have a full "doc".
+                        XmlDocument doc = new XmlDocument();
+                        doc.LoadXml(line);
+                        XmlElement elem = doc.DocumentElement;
+                        if (elem != null)
+                            m_jc.Write(elem);
+                    }
+                }
+                catch (XmlException ex) {
+                    Console.WriteLine("Invalid XML: " + ex.Message);
+                }
+            }           
         }
 
         bool jc_OnInvalidCertificate(object sender, System.Security.Cryptography.X509Certificates.X509Certificate certificate, System.Security.Cryptography.X509Certificates.X509Chain chain, System.Net.Security.SslPolicyErrors sslPolicyErrors)
