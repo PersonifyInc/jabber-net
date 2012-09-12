@@ -63,7 +63,7 @@ namespace bedrock.net
         private const string METHOD = "POST";
 
         private readonly int m_hold = 1;
-        private int m_wait = 60;
+        private int m_wait = 30;
         private int m_maxPoll = 30;
         private int m_minPoll = 1;
         private Uri m_uri = null;
