@@ -105,13 +105,8 @@ namespace bedrock.net
         private static readonly Encoding ENC = Encoding.UTF8;
         private string m_host = null;
         private Address m_addr = null;
-        private bool m_ssl = false;
-#if(WEB_REQUEST)
-        private HttpWebRequest m_request = null;
-        //public static ManualResetEvent m_allDone = new ManualResetEvent(false);        
-#else
+        private bool m_ssl = false;  
         private AsyncSocket m_sock = null;
-#endif
         private ParseState m_state = ParseState.START;
         private PendingRequest m_current = null;
         private bool m_keepRunning = true;
@@ -199,6 +194,9 @@ namespace bedrock.net
         public void Execute(string method, Uri URL, byte[] body, int offset, int len, string contentType)
         {
             Debug.Assert(!this.IsPending);
+
+            Debug.WriteLine("------------------\nExecute Socket" + m_name);
+            Debug.WriteLine(Encoding.ASCII.GetString(body, offset, len));
 
             PendingRequest req = new PendingRequest(method, URL, body, offset, len, contentType);
             if (m_host == null)
@@ -356,14 +354,14 @@ namespace bedrock.net
            
             try
             {
-                m_request = (HttpWebRequest)WebRequest.Create(req.URI);                                        
-                m_request.Method = req.Method;
-                m_request.ContentType = req.ContentType;
-                m_request.ContentLength = req.Length;
-                m_request.ConnectionGroupName = m_name;
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(req.URI);                                        
+                request.Method = req.Method;
+                request.ContentType = req.ContentType;
+                request.ContentLength = req.Length;
+                request.ConnectionGroupName = m_name;
                 //m_request.Headers.Set(HttpRequestHeader.Date, string.Format("{0:r}", DateTime.Now));
                 //m_request.Headers.Set(HttpRequestHeader.Host, req.URI.Host);
-                m_request.Headers.Set("X-JN-Name", m_name);
+                request.Headers.Set("X-JN-Name", m_name);
                 if ((m_proxyURI != null) && (m_proxyCredentials != null))
                 {
                     try
@@ -371,7 +369,7 @@ namespace bedrock.net
                         WebProxy myProxy = new WebProxy();
                         myProxy.Address = m_proxyURI;
                         myProxy.Credentials = m_proxyCredentials;
-                        m_request.Proxy = myProxy;
+                        request.Proxy = myProxy;
                     }
                     catch (UriFormatException e)
                     {
@@ -381,10 +379,10 @@ namespace bedrock.net
                 }
 
                 RequestState myRequestState = new RequestState();                
-                myRequestState.request = m_request;
+                myRequestState.request = request;
 
                 // start the asynchronous operation
-                m_request.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), myRequestState);               
+                request.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), myRequestState);               
             }
             catch (WebException e)
             {
@@ -414,7 +412,7 @@ namespace bedrock.net
             postStream.Close();
 
             // Start the asynchronous operation to get the response
-            IAsyncResult asyncResult = (IAsyncResult)m_request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
+            IAsyncResult asyncResult = (IAsyncResult)myHttpWebRequest.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
 
             //Notify the listener 
             m_listener.OnWrite(null, m_current.Body, 0, m_current.Length);
@@ -446,8 +444,7 @@ namespace bedrock.net
                 Console.WriteLine("\nHttpSocket::RespCallback - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
-            }           
-            //m_allDone.Set();
+            }                       
         }
 
         private void ReadCallBack(IAsyncResult asyncResult)
@@ -486,9 +483,7 @@ namespace bedrock.net
                 Console.WriteLine("\nHttpSocket::ReadCallBack - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
-            }
-
-            //m_allDone.Set();
+            }            
         }
 #else
         private void Send(PendingRequest req)
@@ -628,7 +623,7 @@ namespace bedrock.net
         {
             m_state = ParseState.START;
             m_current = null;
-            Debug.WriteLine("HTTP Socket " + m_name + " done");
+            Debug.WriteLine("------------------\nHTTP Socket " + m_name + " done");
         }
 
         bool ISocketEventListener.OnRead(BaseSocket sock, byte[] buf, int offset, int length)
