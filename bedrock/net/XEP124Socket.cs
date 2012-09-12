@@ -197,7 +197,7 @@ namespace bedrock.net
             if (!other.IsPending)
                 m_lastSock = other;
 
-            Debug.WriteLine("Socket: " + m_lastSock.Name);
+            //Debug.WriteLine("Socket: " + m_lastSock.Name);
             return m_lastSock;
         }
 
@@ -233,8 +233,7 @@ namespace bedrock.net
                     //if (NeitherPending)
                     //    m_queue.AddFirst((XmlElement)null);
 
-                    Debug.WriteLine("A: " + m_sockA.IsPending);
-                    Debug.WriteLine("B: " + m_sockB.IsPending);
+                    Debug.WriteLine("Pending status A: " + m_sockA.IsPending + " B: " + m_sockB.IsPending);                    
                     while ((m_queue.First == null) || BothPending) {
                         Monitor.Wait(m_queue);
                         if (!m_running)
@@ -580,13 +579,14 @@ namespace bedrock.net
 
         bool ISocketEventListener.OnRead(BaseSocket sock, byte[] buf, int offset, int length)
         {
+            Debug.WriteLine("OnRead: " + ((HttpSocket)sock).Name);
+            Debug.WriteLine(Encoding.ASCII.GetString(buf, offset, length));
+
             if (!m_running)
             {
                 Debug.WriteLine("shutting down.  extra bytes received.");
                 return false;
-            }
-
-            Debug.WriteLine("OnRead: " + ((HttpSocket)sock).Name);
+            }            
 
             // Parse out the first start tag or empty element, which will be
             // <body/>.
