@@ -86,11 +86,11 @@ namespace bedrock.net
         public class RequestState
         {
             // This class stores the state of the request. 
-            const int BUFFER_SIZE = 64*1024;    //is 64K ok?
+            const int BUFFER_SIZE = 64*1024;    //is 64K ok?            
             public MemoryStream requestData;
             public byte[] bufferRead;
-            public WebRequest request;
-            public WebResponse response;
+            public HttpWebRequest request;
+            public HttpWebResponse response;
             public Stream responseStream;
             public RequestState()
             {
@@ -108,7 +108,7 @@ namespace bedrock.net
         private bool m_ssl = false;
 #if(WEB_REQUEST)
         private HttpWebRequest m_request = null;
-        public static ManualResetEvent m_allDone = new ManualResetEvent(false);        
+        //public static ManualResetEvent m_allDone = new ManualResetEvent(false);        
 #else
         private AsyncSocket m_sock = null;
 #endif
@@ -380,22 +380,11 @@ namespace bedrock.net
                     }
                 }
 
-                Stream dataStream = m_request.GetRequestStream();
-                dataStream.Write(req.Body, 0, req.Length);
-                dataStream.Close();
-
-                RequestState myRequestState = new RequestState();
+                RequestState myRequestState = new RequestState();                
                 myRequestState.request = m_request;
 
-                //Since we don't use the AsynsSocket, we call the ISocketEvent by ourself.
-                m_listener.OnWrite(null, req.Body, 0, req.Length);
-
-                // Start the Asynchronous call for response.
-                IAsyncResult asyncResult = (IAsyncResult)m_request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);                    
-
-                m_allDone.WaitOne();
-                // Release the WebResponse resource.
-                myRequestState.response.Close();
+                // start the asynchronous operation
+                m_request.BeginGetRequestStream(new AsyncCallback(GetRequestStreamCallback), myRequestState);               
             }
             catch (WebException e)
             {
@@ -411,15 +400,34 @@ namespace bedrock.net
             }
         }
 
+        private void GetRequestStreamCallback(IAsyncResult asynchronousResult)
+        {
+            RequestState myRequestState = (RequestState)asynchronousResult.AsyncState;
+
+            HttpWebRequest myHttpWebRequest = myRequestState.request;
+
+            // End the operation
+            Stream postStream = myHttpWebRequest.EndGetRequestStream(asynchronousResult);
+
+            // Write to the request stream.
+            postStream.Write(m_current.Body, 0, m_current.Length);
+            postStream.Close();
+
+            // Start the asynchronous operation to get the response
+            IAsyncResult asyncResult = (IAsyncResult)m_request.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
+
+            //Notify the listener 
+            m_listener.OnWrite(null, m_current.Body, 0, m_current.Length);
+        }
+
         private void RespCallback(IAsyncResult asynchronousResult)
         {
             try
             {
                 // Set the State of request to asynchronous.
                 RequestState myRequestState = (RequestState)asynchronousResult.AsyncState;
-                WebRequest myWebRequest1 = myRequestState.request;
-                // End the Asynchronous response.
-                myRequestState.response = myWebRequest1.EndGetResponse(asynchronousResult);
+                HttpWebRequest myHttpWebRequest = myRequestState.request;                
+                myRequestState.response = (HttpWebResponse)myHttpWebRequest.EndGetResponse(asynchronousResult);
 
                 //Hold the response in a MemoryStream.
                 myRequestState.requestData = new MemoryStream((int)myRequestState.response.ContentLength);
@@ -427,22 +435,19 @@ namespace bedrock.net
                 // Read the response into a 'Stream' object.
                 Stream responseStream = myRequestState.response.GetResponseStream();
                 myRequestState.responseStream = responseStream;
+
                 // Begin the reading of the contents of the HTML page and print it to the console.
                 IAsyncResult asynchronousResultRead = responseStream.BeginRead(myRequestState.bufferRead, 0, myRequestState.bufferRead.Length, new AsyncCallback(ReadCallBack), myRequestState);
 
+                return;
             }
             catch (WebException e)
             {
                 Console.WriteLine("\nHttpSocket::RespCallback - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("\nHttpSocket::RespCallback - Exception raised!");
-                Console.WriteLine("Source : " + e.Source);
-                Console.WriteLine("Message : " + e.Message);
-            }
+            }           
+            //m_allDone.Set();
         }
 
         private void ReadCallBack(IAsyncResult asyncResult)
@@ -458,6 +463,7 @@ namespace bedrock.net
                 {
                     myRequestState.requestData.Write(myRequestState.bufferRead, 0, read);
                     IAsyncResult asynchronousResult = responseStream.BeginRead(myRequestState.bufferRead, 0, myRequestState.bufferRead.Length, new AsyncCallback(ReadCallBack), myRequestState);
+                    return;
                 }
                 else
                 {
@@ -469,9 +475,10 @@ namespace bedrock.net
                         {
                             Close();                            
                         }                        
-                    }                    
-                    responseStream.Close();
-                    m_allDone.Set();
+                    }
+                    // Release the HttpWebResponse resource.
+                    responseStream.Close();                    
+                    myRequestState.response.Close();
                 }
             }
             catch (WebException e)
@@ -480,13 +487,8 @@ namespace bedrock.net
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
             }
-            catch (Exception e)
-            {
-                Console.WriteLine("\nHttpSocket::ReadCallBack - Exception raised!");
-                Console.WriteLine("Source : {0}", e.Source);
-                Console.WriteLine("Message : {0}", e.Message);
-            }
 
+            //m_allDone.Set();
         }
 #else
         private void Send(PendingRequest req)
