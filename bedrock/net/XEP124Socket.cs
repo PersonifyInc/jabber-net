@@ -549,7 +549,7 @@ namespace bedrock.net
 
         void ISocketEventListener.OnClose(BaseSocket sock)
         {
-            throw new Exception("The method or operation is not implemented.");
+            Close();
         }
 
         void ISocketEventListener.OnError(BaseSocket sock, Exception ex)

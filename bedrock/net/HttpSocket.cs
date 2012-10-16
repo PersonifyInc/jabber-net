@@ -375,6 +375,9 @@ namespace bedrock.net
                     {
                         Console.WriteLine("\nUriFormatException is thrown.Message is {0}", e.Message);
                         Console.WriteLine("\nThe format of the Proxy address is invalid");
+
+                        Close();
+                        m_listener.OnClose(this);
                     }
                 }
 
@@ -389,12 +392,18 @@ namespace bedrock.net
                 Console.WriteLine("\nHttpSocket::Send - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
+
+                Close();
+                m_listener.OnClose(this);
             }
             catch (Exception e)
             {
                 Console.WriteLine("\nHttpSocket::Send - Exception raised!");
                 Console.WriteLine("Source : " + e.Source);
                 Console.WriteLine("Message : " + e.Message);
+
+                Close();
+                m_listener.OnClose(this);
             }
         }
 
@@ -404,18 +413,36 @@ namespace bedrock.net
 
             HttpWebRequest myHttpWebRequest = myRequestState.request;
 
-            // End the operation
-            Stream postStream = myHttpWebRequest.EndGetRequestStream(asynchronousResult);
+            try {
+                // End the operation
+                Stream postStream = myHttpWebRequest.EndGetRequestStream(asynchronousResult);
 
-            // Write to the request stream.
-            postStream.Write(m_current.Body, 0, m_current.Length);
-            postStream.Close();
+                // Write to the request stream.
+                postStream.Write(m_current.Body, 0, m_current.Length);
+                postStream.Close();
 
-            // Start the asynchronous operation to get the response
-            IAsyncResult asyncResult = (IAsyncResult)myHttpWebRequest.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
+                // Start the asynchronous operation to get the response
+                IAsyncResult asyncResult = (IAsyncResult)myHttpWebRequest.BeginGetResponse(new AsyncCallback(RespCallback), myRequestState);
 
-            //Notify the listener 
-            m_listener.OnWrite(null, m_current.Body, 0, m_current.Length);
+                //Notify the listener 
+                m_listener.OnWrite(null, m_current.Body, 0, m_current.Length);
+            }
+            catch (WebException e) {
+                Console.WriteLine("\nHttpSocket::GetRequestStreamCallback - WebException raised!");
+                Console.WriteLine("\n{0}", e.Message);
+                Console.WriteLine("\n{0}", e.Status);
+
+                Close();
+                m_listener.OnClose(this);
+            }
+            catch (Exception e) {
+                Console.WriteLine("\nHttpSocket::GetRequestStreamCallback - Exception raised!");
+                Console.WriteLine("Source : " + e.Source);
+                Console.WriteLine("Message : " + e.Message);
+
+                Close();
+                m_listener.OnClose(this);
+            }
         }
 
         private void RespCallback(IAsyncResult asynchronousResult)
@@ -444,6 +471,9 @@ namespace bedrock.net
                 Console.WriteLine("\nHttpSocket::RespCallback - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
+
+                Close();
+                m_listener.OnClose(this);
             }                       
         }
 
@@ -483,6 +513,9 @@ namespace bedrock.net
                 Console.WriteLine("\nHttpSocket::ReadCallBack - WebException raised!");
                 Console.WriteLine("\n{0}", e.Message);
                 Console.WriteLine("\n{0}", e.Status);
+
+                Close();
+                m_listener.OnClose(this);
             }            
         }
 #else
