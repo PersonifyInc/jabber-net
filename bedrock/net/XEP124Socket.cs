@@ -311,10 +311,18 @@ namespace bedrock.net
         /// </summary>
         public override void Close()
         {
-            Body body = CreateOpenBodyTag();
-            body.Type = BodyType.terminate;
+            if (m_running) {
+                Body body = CreateOpenBodyTag();
+                body.Type = BodyType.terminate;
 
-            Enqueue(body);
+                Enqueue(body);
+            }
+            else {
+                // Make sure that the queue has a chance to process/free
+                lock (m_queue) {
+                    Monitor.Pulse(m_queue);
+                }
+            }
 
             if (m_thread != null)
                 m_thread.Join();
