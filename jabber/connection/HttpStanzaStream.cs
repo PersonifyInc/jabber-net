@@ -285,7 +285,13 @@ namespace jabber.connection
             Debug.Assert(m_listener != null);
             Debug.Assert(m_elements != null);
             m_listener.BytesRead(buf, offset, length);
-            m_elements.Push(buf, offset, length);
+
+            try {
+                m_elements.Push(buf, offset, length);
+            }
+            catch (Exception e) { // Possible to have race at shutdown. Ensure that this doesn't take us out.
+                return false;
+            }
             return true;
         }
 
